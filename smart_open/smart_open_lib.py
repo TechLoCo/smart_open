@@ -144,7 +144,7 @@ def smart_open(uri, mode="rb", **kw):
                 key = bucket.get_key(parsed_uri.key_id)
                 if key is None:
                     raise KeyError(parsed_uri.key_id)
-                return S3OpenRead(key)
+                return S3OpenRead(key, kw.pop('compression', None))
             elif mode in ('w', 'wb'):
                 key = bucket.get_key(parsed_uri.key_id, validate=False)
                 if key is None:
@@ -170,7 +170,7 @@ def smart_open(uri, mode="rb", **kw):
     elif isinstance(uri, boto.s3.key.Key):
         # handle case where we are given an S3 key directly
         if mode in ('r', 'rb'):
-            return S3OpenRead(uri)
+            return S3OpenRead(uri, kw.pop('compression', None))
         elif mode in ('w', 'wb'):
             return S3OpenWrite(uri, **kw)
     elif hasattr(uri, 'read'):
@@ -385,15 +385,16 @@ class S3OpenRead(object):
     their extension.
 
     """
-    def __init__(self, read_key):
+    def __init__(self, read_key, compression=None):
         if not hasattr(read_key, "bucket") and not hasattr(read_key, "name") and not hasattr(read_key, "read") \
                 and not hasattr(read_key, "close"):
             raise TypeError("can only process S3 keys")
         self.read_key = read_key
+        self.compression = compression
         self._open_reader()
 
     def _open_reader(self):
-        if is_gzip(self.read_key.name):
+        if is_gzip(self.read_key.name) or self.compression == 'gzip':
             self.reader = gzipstreamfile.GzipStreamFile(self.read_key)
         else:
             self.reader = S3ReadStream(self.read_key)
